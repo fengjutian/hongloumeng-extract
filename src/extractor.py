@@ -28,26 +28,46 @@ prompt = ChatPromptTemplate.from_messages([
     ("human", "{text}")
 ])
 
-def extract_info(chunks):
-    model = OllamaLLM(model="llama3", temperature=0)
-    extraction_chain = prompt | model
-    results = []
-    
-    for idx, chunk in enumerate(chunks, 1):
-        print(f"正在处理第 {idx}/{len(chunks)} 个分块的信息提取...")
-        # 使用链处理文本块
-        response = extraction_chain.invoke({"text": chunk})
+def extract_info_batch(chunks, model_name="llama3.1:8b", batch_size=5):
+    """批量处理文本块以提高性能"""
+    try:
+        model = OllamaLLM(model=model_name, temperature=0)
+        extraction_chain = prompt | model
+        results = []
         
-        # 尝试解析JSON响应
-        try:
-            # 这里我们假设模型会返回有效的JSON格式
-            # 如果需要更健壮的解析，可以添加错误处理
-            import json
-            parsed_result = json.loads(response)
-            results.append(parsed_result)
-        except Exception as e:
-            print(f"解析错误: {e}")
-            # 如果解析失败，将原始响应作为文本保存
-            results.append({"raw_response": response})
-    
-    return results
+        # 分批处理
+        for batch_idx in range(0, len(chunks), batch_size):
+            batch_chunks = chunks[batch_idx:batch_idx+batch_size]
+            batch_results = []
+            
+            # 并行处理每个批次内的文本块
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor(max_workers=batch_size) as executor:
+                future_to_chunk = {executor.submit(extraction_chain.invoke, {"text": chunk}): chunk for chunk in batch_chunks}
+                
+                for idx, future in enumerate(concurrent.futures.as_completed(future_to_chunk), 1):
+                    chunk_idx = batch_idx + idx
+                    print(f"正在处理第 {chunk_idx}/{len(chunks)} 个分块的信息提取...")
+                    try:
+                        response = future.result()
+                        # 解析响应...
+                        try:
+                            import json
+                            parsed_result = json.loads(response)
+                            batch_results.append(parsed_result)
+                        except Exception as e:
+                            print(f"解析错误: {e}")
+                            batch_results.append({"raw_response": response})
+                    except Exception as e:
+                        print(f"处理批处理块时出错: {e}")
+            
+            results.extend(batch_results)
+        
+        return results
+    except Exception as e:
+        print(f"模型调用错误: {e}")
+        print("提示：请确保你已经安装了Ollama并下载了相应的模型")
+        print(f"当前尝试使用的模型: {model_name}")
+        print("你可以使用 'ollama list' 命令查看已安装的模型")
+        print("如果需要下载模型，可以使用 'ollama pull 模型名称' 命令")
+        raise

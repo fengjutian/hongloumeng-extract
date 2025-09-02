@@ -5,3 +5,5 @@ langchain-ollama
 langchain-extract
 pydantic
 pyyaml
+networkx
+pyvis
