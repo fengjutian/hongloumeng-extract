@@ -1,28 +1,32 @@
 from langchain_ollama import OllamaLLM
 from langchain.prompts import PromptTemplate
 import concurrent.futures
+from utils import get_ollama_base_url
 
-def summarize_chunk(chunk: str, model_name="llama3.1:8b") -> str:
+def summarize_chunk(chunk: str, model_name="llama3:latest", config=None) -> str:
     """对单个文本块生成摘要"""
-    model = OllamaLLM(model=model_name, temperature=0)
+    base_url = get_ollama_base_url(config) if config else "http://localhost:11434"
+    model = OllamaLLM(model=model_name, temperature=0, base_url=base_url)
     prompt = PromptTemplate.from_template(
         "请为以下文本生成简洁的中文摘要（重点人物、情节走向）：\n\n{chunk}\n\n摘要："
     )
     chain = prompt | model
     return chain.invoke({"chunk": chunk})
 
-def summarize_all_optimized(chunks, model_name="llama3.1:8b", batch_size=4):
+def summarize_all_optimized(chunks, model_name="llama3.1:8b", batch_size=4, config=None):
     """批量摘要，并汇总为整体摘要（优化版）"""
+    base_url = get_ollama_base_url(config) if config else "http://localhost:11434"
     # 初始化模型一次
-    model = OllamaLLM(model=model_name, temperature=0)
+    model = OllamaLLM(model=model_name, temperature=0, base_url=base_url)
     prompt = PromptTemplate.from_template(
         "请为以下文本生成简洁的中文摘要（重点人物、情节走向）：\n\n{chunk}\n\n摘要："
     )
     chain = prompt | model
     summaries = []
     
-    # 使用线程池并行处理
-    with concurrent.futures.ThreadPoolExecutor(max_workers=min(batch_size, len(chunks))) as executor:
+    # 使用线程池并行处理，但限制并发数量
+    actual_batch_size = min(batch_size, len(chunks), 2)  # 进一步限制并发数量
+    with concurrent.futures.ThreadPoolExecutor(max_workers=actual_batch_size) as executor:
         # 提交所有任务
         future_to_idx = {
             executor.submit(chain.invoke, {"chunk": chunk}): idx 

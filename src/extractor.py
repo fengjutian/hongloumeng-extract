@@ -2,6 +2,7 @@ from langchain_ollama import OllamaLLM
 from langchain_core.prompts import ChatPromptTemplate
 from pydantic import BaseModel
 from typing import List
+from utils import get_ollama_base_url
 
 # 定义抽取的数据结构
 class Character(BaseModel):
@@ -28,21 +29,23 @@ prompt = ChatPromptTemplate.from_messages([
     ("human", "{text}")
 ])
 
-def extract_info_batch(chunks, model_name="llama3.1:8b", batch_size=5):
+def extract_info_batch(chunks, model_name="llama3.1:8b", batch_size=5, config=None):
     """批量处理文本块以提高性能"""
     try:
-        model = OllamaLLM(model=model_name, temperature=0)
+        base_url = get_ollama_base_url(config) if config else "http://localhost:11434"
+        model = OllamaLLM(model=model_name, temperature=0, base_url=base_url)
         extraction_chain = prompt | model
         results = []
         
-        # 分批处理
-        for batch_idx in range(0, len(chunks), batch_size):
-            batch_chunks = chunks[batch_idx:batch_idx+batch_size]
+        # 分批处理，并限制每批大小
+        actual_batch_size = min(batch_size, 2)  # 限制每批大小
+        for batch_idx in range(0, len(chunks), actual_batch_size):
+            batch_chunks = chunks[batch_idx:batch_idx+actual_batch_size]
             batch_results = []
             
             # 并行处理每个批次内的文本块
             import concurrent.futures
-            with concurrent.futures.ThreadPoolExecutor(max_workers=batch_size) as executor:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=len(batch_chunks)) as executor:
                 future_to_chunk = {executor.submit(extraction_chain.invoke, {"text": chunk}): chunk for chunk in batch_chunks}
                 
                 for idx, future in enumerate(concurrent.futures.as_completed(future_to_chunk), 1):

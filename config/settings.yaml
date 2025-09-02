@@ -1,4 +1,6 @@
-model: "llama3.1:8b"
+model: "llama3:latest"
 temperature: 0
 chunk_size: 1000
 chunk_overlap: 100
+ollama_base_url: "http://localhost:11434"
+batch_size: 2  # 减小批次大小以减少并发连接

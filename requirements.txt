@@ -7,3 +7,4 @@ pydantic
 pyyaml
 networkx
 pyvis
+requests
