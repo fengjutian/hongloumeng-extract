@@ -1,0 +1,4 @@
+model: "llama3.1:8b"
+temperature: 0
+chunk_size: 1000
+chunk_overlap: 100
