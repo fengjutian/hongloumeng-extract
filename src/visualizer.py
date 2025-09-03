@@ -3,6 +3,7 @@ from pyvis.network import Network
 from collections import defaultdict
 import os
 import json  # 添加缺失的json模块导入
+import networkx as nx  # 添加缺失的networkx模块导入
 
 def build_character_graph_optimized(entities_path="outputs/entities.json", 
                                   output_html="outputs/character_graph.html"):
@@ -78,8 +79,11 @@ def build_character_graph_optimized(entities_path="outputs/entities.json",
         G = G.subgraph([n for n in G.nodes if G.degree(n) > 0])
         
         # 使用 PyVis 生成可交互网页
-        # 修改参数，解决渲染问题
-        net = Network(height="1000px", width="100%", notebook=False, directed=False)
+        # 修改参数，解决渲染问题 - 使用CDN资源代替本地资源
+        net = Network(height="1000px", width="100%", notebook=False, directed=False, 
+                     cdn_resources="remote",  # 使用远程CDN资源
+                     bgcolor="#ffffff", 
+                     font_color="black")
         net.barnes_hut()  # 使用更高效的布局算法
         
         # 添加节点和边
