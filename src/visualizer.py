@@ -1,8 +1,8 @@
-import json
 import networkx as nx
 from pyvis.network import Network
 from collections import defaultdict
 import os
+import json  # 添加缺失的json模块导入
 
 def build_character_graph_optimized(entities_path="outputs/entities.json", 
                                   output_html="outputs/character_graph.html"):
@@ -26,15 +26,27 @@ def build_character_graph_optimized(entities_path="outputs/entities.json",
         # 先收集所有章节中的人物列表
         chapter_characters = []
         for chap in chapters:
-            if "entities" not in chap or not chap["entities"]:
+            # 改进数据处理，兼容不同格式
+            if not isinstance(chap, dict):
                 continue
             
             characters = []
-            for e in chap["entities"]:
-                if isinstance(e, dict) and "characters" in e:
-                    for char in e["characters"]:
-                        if isinstance(char, dict) and "name" in char:
-                            characters.append(char["name"])
+            # 处理直接包含characters的情况
+            if "characters" in chap:
+                for char in chap["characters"]:
+                    if isinstance(char, dict):
+                        name = char.get("name")
+                        if name and name != "null" and name is not None:
+                            characters.append(name)
+            # 处理嵌套在entities中的情况
+            elif "entities" in chap and isinstance(chap["entities"], list):
+                for e in chap["entities"]:
+                    if isinstance(e, dict) and "characters" in e:
+                        for char in e["characters"]:
+                            if isinstance(char, dict):
+                                name = char.get("name")
+                                if name and name != "null" and name is not None:
+                                    characters.append(name)
             
             if characters:
                 chapter_characters.append(characters)

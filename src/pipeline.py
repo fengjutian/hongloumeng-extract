@@ -1,5 +1,5 @@
-import json
 import time
+import json  # 添加缺失的json模块导入
 from summarizer import summarize_all_optimized  # 使用优化版
 from loader import load_pdf
 from chunker import chunk_text_optimized  # 使用优化版
