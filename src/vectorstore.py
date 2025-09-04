@@ -1,5 +1,6 @@
 from langchain_community.vectorstores import FAISS
-from langchain_community.embeddings import HuggingFaceEmbeddings
+# 更新导入语句，使用新的 langchain_huggingface 包
+from langchain_huggingface import HuggingFaceEmbeddings
 from langchain.chains import RetrievalQA
 from langchain_ollama import OllamaLLM
 import json
@@ -9,13 +10,13 @@ from concurrent.futures import ThreadPoolExecutor
 from utils import get_ollama_base_url
 
 
-def build_vectorstore(chapters_json="outputs/chapters.json", index_path="outputs/faiss_index", 
+def build_vectorstore(chapters_json=None, index_path="outputs/faiss_index", 
                      batch_size=100, use_multithreading=True, embedding_model="sentence-transformers/all-MiniLM-L6-v2"):
     """
     将章节文本存入矢量数据库（优化版）
     
     Args:
-        chapters_json: 章节JSON文件路径
+        chapters_json: 章节JSON文件路径，如果为None则尝试从chunks.json加载
         index_path: 向量数据库保存路径
         batch_size: 批处理大小，用于控制内存使用
         use_multithreading: 是否使用多线程加速
@@ -23,19 +24,34 @@ def build_vectorstore(chapters_json="outputs/chapters.json", index_path="outputs
     """
     start_time = time.time()
     
-    # 1. 加载章节（使用更快的JSON解析）
+    # 1. 加载章节数据（尝试从不同来源）
     print("正在加载章节数据...")
-    with open(chapters_json, "r", encoding="utf-8") as f:
-        chapters = json.load(f)
     
-    texts = []
-    metadatas = []
+    # 尝试从指定路径加载，如果未指定或文件不存在，则尝试从chunks.json加载
+    if chapters_json and os.path.exists(chapters_json):
+        with open(chapters_json, "r", encoding="utf-8") as f:
+            chapters = json.load(f)
+        
+        texts = []
+        metadatas = []
+        
+        for chap in chapters:
+            texts.append(chap["text"])
+            metadatas.append({"title": chap["title"]})
+    else:
+        # 尝试从chunks.json加载
+        chunks_path = "outputs/chunks.json"
+        if os.path.exists(chunks_path):
+            with open(chunks_path, "r", encoding="utf-8") as f:
+                chunks = json.load(f)
+            
+            texts = chunks
+            # 为每个chunk创建metadata
+            metadatas = [{"title": f"Chunk {i+1}"} for i in range(len(chunks))]
+        else:
+            raise FileNotFoundError("找不到章节数据文件！请先运行pipeline.py生成chunks.json")
     
-    for chap in chapters:
-        texts.append(chap["text"])
-        metadatas.append({"title": chap["title"]})
-    
-    # 2. 初始化嵌入模型（添加缓存参数）
+    # 2. 初始化嵌入模型
     print(f"正在初始化嵌入模型: {embedding_model}...")
     embeddings = HuggingFaceEmbeddings(
         model_name=embedding_model,
@@ -194,3 +210,14 @@ if __name__ == "__main__":
             print("向量数据库构建完成！")
     except Exception as e:
         print(f"执行问答时出错: {e}")
+        # 提供更友好的错误提示
+        if "找不到章节数据文件" in str(e):
+            print("\n请按照以下步骤操作：")
+            print("1. 确保Ollama服务已启动（运行 'ollama serve'）")
+            print("2. 确保已下载llama3:latest模型（运行 'ollama pull llama3:latest'）")
+            print("3. 先运行pipeline.py生成必要的数据文件：")
+            print("   python src/pipeline.py")
+            print("4. 然后再运行vectorstore.py")
+        elif "Could not import sentence_transformers" in str(e):
+            print("\n缺少必要的依赖包，请运行以下命令安装：")
+            print("pip install sentence-transformers langchain-huggingface")
